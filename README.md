@@ -1,4 +1,4 @@
-# r_sim_practica
+# rsim_practica
 
 Práctica de simulación en r. 
 
