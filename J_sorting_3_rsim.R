@@ -1,9 +1,12 @@
-#TERCERA OPTIMIZACIÓN, ALIAS LA QUE SE ME OCURRIÓ ANOCHE
-#VENTAJAS -> ESCALABLE (POTENCIALMENTE, HAY QUE ESCRIBIR DE FORMA MANUAL UNA PARTE DE CÓDIGO NUEVA P/C/VAR),RÁPIDA,
+#TERCERA OPTIMIZACIÓN
+#VENTAJAS -> ESCALABLE y relativamente RÁPIDA,
 #MATRIZ CON NOMBRE Y CON LOS VALORES DE CADA ITERACIÓN, TIENE EN CUENTA N_EN_J Y SE LE AGREGA VALOR DE INTERDEPENDENCIA, 
 #PARA PROBABILIDAD USA FORMULA DEL MODELO DE LAS ABEJAS
 #DESVENTAJAS -> NO TIENE EN CUENTA LA DISCREPANCIA DE OPCIÓN
 #(J1 PUEDE POTENCIALMENTE SER SAMPLEADO NUEVAMENTE EN J5)
+
+library(ggplot2)
+library(dplyr)
 
 Sn_t <- function() {
   
@@ -37,8 +40,6 @@ Sn_t() #Llamamos a la función, cada vez que la llamamos, el contenido de la func
 
 guardado_Sn_t <- Sn_t() #Guardamos la función para mantener los resultados obtenidos
 
-library(dplyr)
-
 sn_t_df<- tbl_df(as.data.frame(guardado_Sn_t)) #Conversión de matriz a data_frame 
 
 
@@ -48,76 +49,72 @@ sn_t_datatable<- data.table::as.data.table(sn_t_df)  #Data_table permite la modi
 
 j_sorting_opt_3 <- function (){
   
-  sn_t_datatable$J <- sample ( c( "J1","J2","J3","J4","J5","J6","J7","J8"), 1000, #Sampleo aleatorio para crear var J en el datatable
+  J <- as.character(1:9)
+  
+  sn_t_datatable$J <- sample ( c( J ), 1000, #Sampleo aleatorio para crear var J en el datatable
                                replace = T )
   
   sn_t_datatable$confianza <- runif( 1000, 0, 1 ) #runif aleatorio para crear var confianza en el datatable
   
-  sn_t_datatable[ which ( confianza[] >= 0.7 ) ]$J <- sample ( c( "J1","J2","J3","J4","J5","J6","J7","J8" ), 
+  sn_t_datatable[ which ( confianza[] >= 0.7 ) ]$J <- sample ( c( J ), 
                                                                length ( sn_t_datatable[ which( confianza[] >= 0.7 ) ]$J ), 
-                                                               prob = c( 0.2,0.2,0.2,0.2,0.7,0.2,0.2,0.2 ),
+                                                               prob = 
+                                                                 c( rep (0.2, 4 ), 0.7, rep(0.2, 4)), ##MODIFICAR segundo arg de rep SI SE MODIFICA J <- as.character ()
                                                                replace = T ) #Sampleo con prob modificadas según el nivel de confianza d/c/n, si tienen confianza mayor a 0.7, tienen mayor prob de ser sampleados c/j5
   
   n_en_j<- table ( sn_t_datatable$J ) #Vector que contiene la cantidad de n sampleados p/j
   
-  promedio_conf_J8<- mean( sn_t_datatable [ which ( sn_t_datatable$J[] == "J8" ) ]$confianza )
   
-  promedio_conf_J7<- mean( sn_t_datatable [ which ( sn_t_datatable$J[] == "J7" ) ]$confianza )
+  promedio_conf<- select(sn_t_datatable, J, confianza) #Se seleccionan las columnas J y confianza de sn_t_datatable
   
-  promedio_conf_J6<- mean( sn_t_datatable [ which ( sn_t_datatable$J[] == "J6" ) ]$confianza )
+  group_by(promedio_conf, J) %>%                        #Se agrupa la selección anterior según J y luego se saca
+    summarize(mean = mean(confianza)) -> promedio_conf  #Promedio de la variable confianza d/c/n en c/j
   
-  promedio_conf_J5<- mean( sn_t_datatable [ which ( sn_t_datatable$J[] == "J5" ) ]$confianza ) #Promedio de la variable 
-  #confianza d/c/n en c/j
-  promedio_conf_J4<- mean ( sn_t_datatable [ which( sn_t_datatable$J[] == "J4" ) ]$confianza )
-  
-  promedio_conf_J3<-mean ( sn_t_datatable [ which ( sn_t_datatable$J[] == "J3" ) ]$confianza )
-  
-  promedio_conf_J2<-mean ( sn_t_datatable [ which ( sn_t_datatable$J[] == "J2" ) ]$confianza )
-  
-  promedio_conf_J1<-mean ( sn_t_datatable [ which ( sn_t_datatable$J[] == "J1" ) ]$confianza )
-  
-  promedio_tot_conf <- c( promedio_conf_J1,promedio_conf_J2,promedio_conf_J3,promedio_conf_J4,promedio_conf_J5,
-                          promedio_conf_J6,promedio_conf_J7,promedio_conf_J8) 
   
   prop_n_en_j<- table ( sn_t_datatable$J )/100 #Proporción de n en c/j
   
-  interdep <- runif ( 1,0,1 ) #Variable interdepencia, si es = 0, c/j tiene una prob de ser sampleado a igual al promedio de confianza d/c/j
+  interdep <- dqrunif ( 1,0,1 ) #Variable interdepencia, si es = 0, c/j tiene una prob de ser sampleado a igual al promedio de confianza d/c/j
   # si = 1, c/j tiene una prob igual a la proporción de n en j de ser sampleado
   
-  prob_j <- ( 1-interdep )*promedio_tot_conf + interdep*prop_n_en_j #Formula extraída del paper de List,2009 (paper abejas)
+  prob_j <- ( 1-interdep )*promedio_conf$mean + interdep*prop_n_en_j #Formula extraída del paper de List,2009 (paper abejas)
   
-  distancia <- c(10,20,20,20,10,10,5,5)/100 #Intento de agregar dicrepancia por distancia de opinion, cuanto más alto es el valor, aumenta la prob. de ser sampleado. 
-  #Un valor alto implica menor distancia y mayor prob. de ser sampleado
+  distancia <- c( rep(10, 9) )/100 #Intento de agregar dicrepancia por distancia de opinion, cuanto más alto es el valor, aumenta la prob. de ser sampleado. 
+  #Un valor alto implica menor distancia y mayor prob. de ser sampleado ##MODIFICAR segundo arg de rep SI SE MODIFICA J <- as.character()
   
   prob_j_mod_por_distancia <- prob_j + distancia
   
-  sn_t_datatable[]$J <- sample ( c( "J1","J2","J3","J4","J5","J6","J7","J8" ), 1000, prob = prob_j_mod_por_distancia, replace = T ) #Sampleo de J c/prob ajustadas según formula
+  sn_t_datatable[]$J <- sample ( c( J ), 1000, prob = prob_j_mod_por_distancia, replace = T ) #Sampleo de J c/prob ajustadas según formula
   
-  return ( table ( sn_t_datatable$J ) )
+  return ( table ( sn_t_datatable$J ) ) #Devuelve un vector, cuyos valores representan la cantidad de n en J
   
 }
 
-j_sorting_opt_3()
+j_sorting_opt_3() #Si J <- as.character() es >= 10 el output es raro 
 
-i3 <- replicate ( 100,j_sorting_opt_3() )
+i3 <- replicate ( 100,j_sorting_opt_3() ) 
 
-i3
+sum_i3 <- function(x) {
+  return(sum(x))
+}
 
-sum_tot<- c ( sum ( i3[1,] ),sum ( i3[2,] ),sum ( i3[3,] ),sum ( i3[4,] ),sum ( i3[5,] ),
-              sum ( i3[6,] ),sum ( i3[7,] ),sum ( i3[8,] ) ) 
+sum_tot<- apply(i3, MARGIN = 1, sum_i3)  
 
-df_sumrep_tot<- data.frame(J=c("J1","J2","J3","J4","J5","J6","J7","J8"), n=sum_tot)
+sum_tot
+
+df_sumrep_tot<- data.frame(J=c(as.character(1:9)), n=sum_tot)
+
+#AJUSTAR nudge_y según n de replicate, está ajustado para 100, 
+# si se cambia a ej.10, el gráfico va a salir mal con el valor actual de nudge_y
 
 ggplot(data=df_sumrep_tot, aes(x=J, y=n)) + 
   geom_bar(stat = "identity", color="black", fill="steelblue") + 
-  geom_text(aes(label=n), nudge_x = -0.5, nudge_y = -3000, vjust=-1, size=3.5)+
-  xlab("Cantidad de J") + 
+  geom_text(aes(label=n), nudge_x = -0.5, nudge_y = -3000, vjust=-1, size=3.5)+ 
+  xlab("J") + 
   ylab("Total de n en J")+
   theme_minimal()+
   coord_flip()
 
-
 system.time ( replicate(50,j_sorting_opt_3() ) ) 
 
-  
-  
+
+length(1:10)
